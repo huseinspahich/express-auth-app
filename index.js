@@ -1,9 +1,12 @@
 import express from "express";
 import bodyParser from "body-parser";
 import pg from "pg";
-import bcrypt, { hash } from "bcrypt";
+import bcrypt from "bcrypt";
+import session from "express-session";
+import passport from "passport";
+import {Strategy} from "passport-local";
+import GoogleStrategy from "passport-google-oauth2"; 
 import env from "dotenv";
-
 
 const app = express();
 const port = 3000;
@@ -12,6 +15,16 @@ env.config();
 
 app.use(bodyParser.urlencoded({extended:true}));
 app.use(express.static("public"));
+
+app.use(session ({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: true,
+    maxAge: 1000 * 60 * 60 * 24,
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
 
 const db = new pg.Client({
     user: process.env.PG_USER,
@@ -36,7 +49,11 @@ app.get("/register", (req,res) => {
 });
 
 app.get("/site", (req,res) => {
-    res.render("home.ejs")
+    if (req.isAuthenticated) {
+        res.render("site.ejs")
+    } else {
+        res.redirect("/login");   
+    }
 });
 
 app.post("/register", async(req,res) => {
@@ -62,31 +79,41 @@ app.post("/register", async(req,res) => {
     }
 });
 
-app.post("/login", async(req,res) => {
-    const email = req.body.username;
-    const password = req.body.password;
+app.post("/login", passport.authenticate("local",{
+    successRedirect: "/site",
+    failureRedirect:"/login"
+}));
+passport.use(new Strategy(async function verify(username, password, cb) {
     try {
-        const checkResult = await db.query("SELECT * FROM users1 WHERE email = $1",[email]);
+        const checkResult = await db.query("SELECT * FROM users1 WHERE email = $1",[username]);
         if (checkResult.rows.length === 0) {
-            console.log("Go register");
+            return cb("User not found");
         } else {
             const user = checkResult.rows[0];
             const userPassword = user.password;
-            bcrypt.compare(password,userPassword, (err,result) => {
+            bcrypt.compare(password, userPassword, (err,result) => {
                 if (err) {
-                    console.log(err);
+                    return cb(err);
                 } else {
                     if (result) {
-                        res.render("site.ejs");
+                        return cb(null, user);
                     } else {
-                        res.redirect("/login");
+                        return cb(null,false);
                     }
                 }
             })
         }
     } catch (error) {
-        console.log(error)
+        return cb(error)
     }
+  }));
+
+passport.serializeUser(function(user, cb) {
+    return cb(null, user);
+});  
+
+passport.deserializeUser(function(user, cb) {
+      return cb(null, user);
 });
 
 app.listen(port, () => {
