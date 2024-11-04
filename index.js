@@ -56,6 +56,17 @@ app.get("/site", (req,res) => {
     }
 });
 
+app.get('/auth/google',
+    passport.authenticate('google', { scope:
+        [ 'email', 'profile' ] }
+  ));
+
+  app.get( '/auth/google/site',
+    passport.authenticate( 'google', {
+        successRedirect: '/site',
+        failureRedirect: '/login'
+}));
+  
 app.post("/register", async(req,res) => {
     const email = req.body.username;
     const password = req.body.password;
@@ -69,8 +80,12 @@ app.post("/register", async(req,res) => {
                 if (err) {
                     console.log(err)
                 } else {
-                  await db.query("INSERT INTO users1(email,password) VALUES ($1,$2)",[email,hash]);
-                    res.render("site.ejs");
+                    const result = await db.query("INSERT INTO users1(email,password) VALUES ($1,$2)",[email,hash]);
+                    const user = result.rows[0];
+                    req.login(user,(err) => {
+                        console.log(err);
+                        res.redirect("/site")
+                    })
                 }
             })
         }
@@ -83,7 +98,7 @@ app.post("/login", passport.authenticate("local",{
     successRedirect: "/site",
     failureRedirect:"/login"
 }));
-passport.use(new Strategy(async function verify(username, password, cb) {
+passport.use("local",new Strategy(async function verify(username, password, cb) {
     try {
         const checkResult = await db.query("SELECT * FROM users1 WHERE email = $1",[username]);
         if (checkResult.rows.length === 0) {
@@ -107,6 +122,18 @@ passport.use(new Strategy(async function verify(username, password, cb) {
         return cb(error)
     }
   }));
+  passport.use("google",new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: 'http://localhost:3000/auth/google/site',
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+  },
+  function(request, accessToken, refreshToken, profile, done) {
+    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+      return done(err, user);
+    });
+  }
+));
 
 passport.serializeUser(function(user, cb) {
     return cb(null, user);
