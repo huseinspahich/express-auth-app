@@ -48,6 +48,15 @@ app.get("/register", (req,res) => {
     res.render("register.ejs")
 });
 
+app.get('/logout', (req, res) => {
+    req.logout(function(err) {
+      if (err) {
+         return next(err);
+         };
+      res.redirect('/');
+    });
+  });
+
 app.get("/site", (req,res) => {
     if (req.isAuthenticated) {
         res.render("site.ejs")
@@ -61,8 +70,8 @@ app.get('/auth/google',
         [ 'email', 'profile' ] }
   ));
 
-  app.get( '/auth/google/site',
-    passport.authenticate( 'google', {
+  app.get('/auth/google/site',
+    passport.authenticate('google', {
         successRedirect: '/site',
         failureRedirect: '/login'
 }));
@@ -128,12 +137,27 @@ passport.use("local",new Strategy(async function verify(username, password, cb) 
     callbackURL: 'http://localhost:3000/auth/google/site',
     userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
   },
-  function(request, accessToken, refreshToken, profile, done) {
-    User.findOrCreate({ googleId: profile.id }, function (err, user) {
-      return done(err, user);
-    });
-  }
-));
+  async (request, accessToken, refreshToken, profile, cb) => {
+    try {
+        console.log(profile);
+        const result = await db.query("SELECT * FROM users WHERE email = $1", [
+          profile.email,
+        ]);
+        if (result.rows.length === 0) {
+          const newUser = await db.query(
+            "INSERT INTO users (email, password) VALUES ($1, $2)",
+            [profile.email, "google"]
+          );
+          return cb(null, newUser.rows[0]);
+        } else {
+          return cb(null, result.rows[0]);
+        }
+      } catch (err) {
+        return cb(err);
+      }
+    }
+  )
+);
 
 passport.serializeUser(function(user, cb) {
     return cb(null, user);
