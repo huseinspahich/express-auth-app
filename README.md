@@ -1,6 +1,6 @@
-# Express Authentication Project
-This project is a web application built with Express.js that provides user authentication using local and Google strategies.    
-It leverages PostgreSQL for data storage and bcrypt for password hashing, offering a secure way to manage user sessions.
+## About
+The Express Authentication Project is a web application that provides secure user authentication using local and Google OAuth strategies, leveraging Passport.js for seamless integration.
+It employs bcrypt for password hashing, manages user sessions securely with express-session, and connects to a PostgreSQL database to store user credentials and session information.
 
 ## Features
 - User registration and login with local strategy.
